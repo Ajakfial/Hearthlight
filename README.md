@@ -55,7 +55,7 @@ ctest --test-dir build/linux -V
 
 Qt install: use your distro package (`qt6-base` etc.), the
 [Qt online installer](https://www.qt.io/download), or
-[aqtinstall](https://github.com/miurahr/aqtinstall). CI installs Qt 6.7 with
+[aqtinstall](https://github.com/miurahr/aqtinstall). CI installs Qt 6.10.3 with
 aqt (see `.github/workflows/ci.yml`).
 
 Portable mode: pass `--portable`, create `portable.txt` next to the binary,

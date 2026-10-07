@@ -7,6 +7,7 @@ class InstanceManager;
 class ModLoaderInstaller;
 class MojangApi;
 class QComboBox;
+class QLabel;
 class QLineEdit;
 class QListWidget;
 class QListWidgetItem;

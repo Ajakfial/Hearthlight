@@ -30,6 +30,20 @@
       "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
     },
     {
+      "name": "windows-ninja",
+      "displayName": "Windows Ninja + MSVC",
+      "description": "Windows with any installed MSVC via Ninja (used by CI, robust to runner images)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/windows-ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "HEARTHLIGHT_BUILD_TESTS": "ON"
+      },
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    },
+    {
       "name": "macos",
       "displayName": "macOS universal",
       "description": "macOS universal binary (arm64 + x86_64)",
@@ -57,6 +71,7 @@
   ],
   "buildPresets": [
     { "name": "windows-msvc", "configurePreset": "windows-msvc", "configuration": "RelWithDebInfo" },
+    { "name": "windows-ninja", "configurePreset": "windows-ninja" },
     { "name": "windows-mingw", "configurePreset": "windows-mingw" },
     { "name": "macos", "configurePreset": "macos" },
     { "name": "linux", "configurePreset": "linux" }

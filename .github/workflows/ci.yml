@@ -15,30 +15,59 @@ jobs:
             preset: windows-ninja
             qt_version: "6.10.3"
             qt_arch: win64_msvc2019_64
+            aqt_host: windows
           - os: macos-latest
             preset: macos
             qt_version: "6.10.3"
             qt_arch: clang_64
+            aqt_host: mac
           - os: ubuntu-22.04
             preset: linux
             qt_version: "6.10.3"
             qt_arch: gcc_64
+            aqt_host: linux
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Qt
-        uses: jurplel/install-qt-action@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          version: ${{ matrix.qt_version }}
-          arch: ${{ matrix.qt_arch }}
-          cache: true
+          python-version: "3.12"
+
+      # download.qt.io's MirrorBrain redirects intermittently serve pruned
+      # metadata ("qt_base not found while parsing XML"), so install Qt from
+      # a full mirror instead of the action's default host. Cached per
+      # version/arch/OS after the first green run.
+      - name: Restore cached Qt
+        id: qt-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/Qt
+          key: qt-${{ matrix.qt_version }}-${{ matrix.qt_arch }}-${{ runner.os }}-v1
+
+      - name: Install Qt (aqt, full mirror)
+        if: steps.qt-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          python3 -m pip install "aqtinstall>=3.1"
+          python3 -m aqt install-qt ${{ matrix.aqt_host }} desktop ${{ matrix.qt_version }} ${{ matrix.qt_arch }} \
+            -m qtsvg --base https://mirrors.aliyun.com/qt/ \
+            --outputdir "${{ github.workspace }}/Qt"
+
+      - name: Export Qt env
+        shell: bash
+        run: |
+          QTDIR="${{ github.workspace }}/Qt/${{ matrix.qt_version }}/${{ matrix.qt_arch }}"
+          echo "Qt6_DIR=$QTDIR/lib/cmake/Qt6" >> "$GITHUB_ENV"
+          echo "CMAKE_PREFIX_PATH=$QTDIR" >> "$GITHUB_ENV"
+          echo "$QTDIR/bin" >> "$GITHUB_PATH"
 
       - name: Set up MSVC (Windows)
         if: startsWith(matrix.os, 'windows')
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Install Ninja (non-MSVC presets)
+      - name: Install Ninja
         if: matrix.preset != 'windows-msvc'
         uses: seanmiddleditch/gha-setup-ninja@v4
 

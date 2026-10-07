@@ -1,0 +1,37 @@
+<RCC>
+  <qresource prefix="/icons">
+    <file alias="home.svg">../../../assets/icons/home.svg</file>
+    <file alias="play.svg">../../../assets/icons/play.svg</file>
+    <file alias="stop.svg">../../../assets/icons/stop.svg</file>
+    <file alias="profile.svg">../../../assets/icons/profile.svg</file>
+    <file alias="plus.svg">../../../assets/icons/plus.svg</file>
+    <file alias="search.svg">../../../assets/icons/search.svg</file>
+    <file alias="download.svg">../../../assets/icons/download.svg</file>
+    <file alias="update.svg">../../../assets/icons/update.svg</file>
+    <file alias="settings.svg">../../../assets/icons/settings.svg</file>
+    <file alias="account.svg">../../../assets/icons/account.svg</file>
+    <file alias="offline.svg">../../../assets/icons/offline.svg</file>
+    <file alias="mod.svg">../../../assets/icons/mod.svg</file>
+    <file alias="resource.svg">../../../assets/icons/resource.svg</file>
+    <file alias="shader.svg">../../../assets/icons/shader.svg</file>
+    <file alias="world.svg">../../../assets/icons/world.svg</file>
+    <file alias="folder.svg">../../../assets/icons/folder.svg</file>
+    <file alias="trash.svg">../../../assets/icons/trash.svg</file>
+    <file alias="copy.svg">../../../assets/icons/copy.svg</file>
+    <file alias="export.svg">../../../assets/icons/export.svg</file>
+    <file alias="import.svg">../../../assets/icons/import.svg</file>
+    <file alias="clone.svg">../../../assets/icons/clone.svg</file>
+    <file alias="edit.svg">../../../assets/icons/edit.svg</file>
+    <file alias="check.svg">../../../assets/icons/check.svg</file>
+    <file alias="toggle.svg">../../../assets/icons/toggle.svg</file>
+    <file alias="info.svg">../../../assets/icons/info.svg</file>
+    <file alias="warning.svg">../../../assets/icons/warning.svg</file>
+    <file alias="error.svg">../../../assets/icons/error.svg</file>
+    <file alias="undo.svg">../../../assets/icons/undo.svg</file>
+    <file alias="snapshot.svg">../../../assets/icons/snapshot.svg</file>
+    <file alias="log.svg">../../../assets/icons/log.svg</file>
+    <file alias="crash.svg">../../../assets/icons/crash.svg</file>
+    <file alias="loader.svg">../../../assets/icons/loader.svg</file>
+    <file alias="logo.svg">../../../assets/icons/logo.svg</file>
+  </qresource>
+</RCC>

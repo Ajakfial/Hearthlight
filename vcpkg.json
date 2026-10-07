@@ -1,0 +1,7 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "hearthlight",
+  "version": "0.1.0",
+  "description": "Hearthlight Minecraft: Java Edition launcher. Qt only; archives/hashing/JSON come from Qt + miniz.",
+  "dependencies": []
+}

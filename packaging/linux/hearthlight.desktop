@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Hearthlight
+GenericName=Minecraft Launcher
+Comment=Your home for every world.
+Exec=Hearthlight
+Icon=hearthlight
+Categories=Game;
+Keywords=minecraft;launcher;mods;modpack;
+StartupWMClass=Hearthlight

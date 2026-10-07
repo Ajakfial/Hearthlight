@@ -1,0 +1,27 @@
+{
+  "app-id": "example.hearthlight.Hearthlight",
+  "runtime": "org.kde.Platform",
+  "runtime-version": "6.7",
+  "sdk": "org.kde.Sdk",
+  "command": "Hearthlight",
+  "finish-args": [
+    "--share=ipc",
+    "--share=network",
+    "--socket=x11",
+    "--socket=wayland",
+    "--socket=pulseaudio",
+    "--device=dri",
+    "--filesystem=xdg-data/Hearthlight:create",
+    "--talk-name=org.freedesktop.Notifications",
+    "--talk-name=org.freedesktop.secrets"
+  ],
+  "modules": [
+    {
+      "name": "hearthlight",
+      "buildsystem": "cmake-ninja",
+      "builddir": true,
+      "config-opts": ["-DCMAKE_BUILD_TYPE=Release"],
+      "sources": [{ "type": "dir", "path": "../.." }]
+    }
+  ]
+}

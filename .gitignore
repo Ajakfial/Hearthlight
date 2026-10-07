@@ -1,0 +1,9 @@
+build/
+.vs/
+.idea/
+*.user
+compile_commands.json
+CMakeFiles/
+_hearthlight*/
+HearthlightData/
+*.log

@@ -19,6 +19,13 @@ file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/_deps/miniz-gen)
 file(WRITE ${CMAKE_BINARY_DIR}/_deps/miniz-gen/miniz_export.h
     "#pragma once\n#ifndef MINIZ_EXPORT\n#define MINIZ_EXPORT\n#endif\n")
 
+# Microsoft sign-in client ID. Default is Prism Launcher's public client ID
+# (works with zero setup; by using it you accept the Microsoft identity
+# platform terms of use). Override at configure time with your own Azure app:
+#   cmake --preset linux -DHEARTHLIGHT_MSA_CLIENT_ID=<your-client-id>
+set(HEARTHLIGHT_MSA_CLIENT_ID "c36a9fb6-4f2a-41ff-90bd-ae7cc92031eb"
+    CACHE STRING "Azure AD client ID used for Microsoft sign-in")
+
 add_library(HearthlightCore STATIC
     Constants.cpp
     AppSettings.h AppSettings.cpp
@@ -60,6 +67,7 @@ add_library(HearthlightCore STATIC
 
 target_include_directories(HearthlightCore PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/..)
 target_include_directories(HearthlightCore PRIVATE ${MINIZ_SRC} ${CMAKE_BINARY_DIR}/_deps/miniz-gen)
+target_compile_definitions(HearthlightCore PUBLIC "HEARTHLIGHT_MSA_CLIENT_ID=\"${HEARTHLIGHT_MSA_CLIENT_ID}\"")
 target_link_libraries(HearthlightCore PUBLIC Qt6::Core Qt6::Network Qt6::Concurrent)
 if(WIN32)
     # Windows Credential Manager (SecureTokenStore).

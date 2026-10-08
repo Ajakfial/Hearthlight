@@ -156,17 +156,21 @@ skins by public PNG URL (classic/slim), and equips/hides capes — all through
 the official Minecraft services API. No ownership is ever spoofed, and
 offline accounts never touch these endpoints.
 
-The Azure client ID lives in one place:
-`src/core/Constants.h` (`kAzureClientId`).
+The Azure client ID defaults to Prism Launcher's public client ID, so sign-in
+works with zero setup — no registration needed. (The Microsoft consent page
+shows the registered app name, "Prism Launcher".) Packagers can substitute
+their own ID at configure time without touching source:
+`cmake --preset linux -DHEARTHLIGHT_MSA_CLIENT_ID=<your-client-id>`
+(see `HEARTHLIGHT_MSA_CLIENT_ID` in `src/core/CMakeLists.txt`).
 
-### Register your own Azure app
+### Register your own Azure app (optional)
 
 1. https://portal.azure.com → Microsoft Entra ID → App registrations → New.
 2. Supported account types: personal Microsoft accounts + organizational.
 3. Mark as public client (Device-code flow needs no redirect URI, but the
    portal requires "Allow public client flows" → Yes).
 4. API permissions (delegated): `Xboxlive.signin`, `Xboxlive.offline_access`.
-5. Copy the Application (client) ID into `kAzureClientId`.
+5. Rebuild with `-DHEARTHLIGHT_MSA_CLIENT_ID=<your-client-id>`.
 
 Clear errors are specified for: no Xbox profile, child account needing family
 approval, no Minecraft purchase, region restrictions, expired auth, and

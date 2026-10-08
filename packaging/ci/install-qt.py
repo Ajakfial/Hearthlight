@@ -288,7 +288,10 @@ def main():
                f"HEARTHLIGHT_QT_CMAKE={cmake_dir}"]
     gh_env = os.environ.get("GITHUB_ENV")
     gh_path = os.environ.get("GITHUB_PATH")
-    # linuxdeploy's Qt plugin locates Qt via $QMAKE (Qt6 ships qmake6).
+    # linuxdeploy's Qt plugin locates Qt via $QMAKE -query, but current Qt
+    # packages don't always ship a qmake binary (Qt 6.10 linux has neither
+    # qmake nor qmake6). Fall back to a generated query shim answering from
+    # this install's fixed prefix - same values qmake would report.
     qmake = None
     for cand in ("qmake6", "qmake"):
         if os.path.isfile(os.path.join(bindir, cand)):
@@ -297,7 +300,49 @@ def main():
     if qmake:
         log(f"qmake candidate: {qmake}")
     else:
-        log("WARNING: no qmake/qmake6 in bindir; linuxdeploy-plugin-qt will fail")
+        qmake = os.path.join(bindir, "qmake")
+        shim_lines = [
+            "#!/usr/bin/env python3",
+            "import os, sys",
+            f"PREFIX = {prefix!r}",
+            f"VERSION = {args.version!r}",
+            "TABLE = {",
+            '    "QT_VERSION": VERSION,',
+            '    "QMAKE_VERSION": "3.1",',
+            '    "QT_INSTALL_PREFIX": PREFIX,',
+            '    "QT_INSTALL_ARCHDATA": PREFIX,',
+            '    "QT_INSTALL_DATA": PREFIX,',
+            '    "QT_INSTALL_DOCS": os.path.join(PREFIX, "doc"),',
+            '    "QT_INSTALL_BINS": os.path.join(PREFIX, "bin"),',
+            '    "QT_INSTALL_TESTS": os.path.join(PREFIX, "tests"),',
+            '    "QT_INSTALL_LIBS": os.path.join(PREFIX, "lib"),',
+            '    "QT_INSTALL_LIBEXECS": os.path.join(PREFIX, "libexec"),',
+            '    "QT_INSTALL_PLUGINS": os.path.join(PREFIX, "plugins"),',
+            '    "QT_INSTALL_QML": os.path.join(PREFIX, "qml"),',
+            '    "QT_INSTALL_TRANSLATIONS": os.path.join(PREFIX, "translations"),',
+            '    "QT_INSTALL_HEADERS": os.path.join(PREFIX, "include"),',
+            '    "QT_HOST_BINS": os.path.join(PREFIX, "bin"),',
+            '    "QT_HOST_DATA": PREFIX,',
+            '    "QT_HOST_LIBS": os.path.join(PREFIX, "lib"),',
+            "}",
+            "args = sys.argv[1:]",
+            'if args == ["-query"]:',
+            "    for k in sorted(TABLE):",
+            '        print(k + ":" + TABLE[k])',
+            'elif len(args) == 2 and args[0] == "-query":',
+            '    print(TABLE.get(args[1], ""))',
+            "else:",
+            '    sys.stderr.write("qmake-query shim: only -query is supported\\n")',
+            "    sys.exit(2)",
+            "",
+        ]
+        with open(qmake, "w", encoding="utf-8", newline="\n") as f:
+            f.write("\n".join(shim_lines))
+        try:
+            os.chmod(qmake, 0o755)
+        except OSError:
+            pass
+        log(f"Generated qmake-query shim at {qmake}")
     if gh_env and gh_path:
         with open(gh_env, "a", encoding="utf-8") as f:
             f.write(f"Qt6_DIR={cmake_dir}\n")

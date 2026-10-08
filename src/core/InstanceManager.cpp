@@ -954,7 +954,7 @@ bool InstanceManager::importCurseforgeZipBlocking(const QString &zipPath, const 
         if (cfFile.downloadUrl.isEmpty() || cfFile.fileName.isEmpty()) {
             const QString why = !sub.fileError.isEmpty() ? sub.fileError
                                                          : tr("no download available");
-            skipped.append(tr("project %1 file %2 (%3)").arg(pair.first).arg(pair.second, why));
+            skipped.append(tr("project %1 file %2 (%3)").arg(pair.first).arg(pair.second).arg(why));
             continue;
         }
         DownloadRequest req;

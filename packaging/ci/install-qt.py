@@ -173,15 +173,29 @@ def main():
     outdir = os.path.abspath(args.outputdir)
     moc_name = "moc.exe" if args.host == "windows" else "moc"
 
+    def show_tree():
+        # Logged on failure so CI output shows what extraction produced.
+        for dirpath, dirnames, filenames in os.walk(outdir):
+            depth = os.path.relpath(dirpath, outdir).count(os.sep)
+            if depth > 3:
+                dirnames[:] = []
+                continue
+            log(f"  tree: {os.path.relpath(dirpath, outdir)}/ "
+                f"dirs={sorted(dirnames)[:8]} files={sorted(filenames)[:8]}")
+
     def find_bindir():
-        verdir = os.path.join(outdir, args.version)
-        if not os.path.isdir(verdir):
+        # Recursive: archive payloads differ per host (flat on Windows,
+        # version-prefixed elsewhere), so locate moc instead of guessing.
+        hits = []
+        for dirpath, _dirnames, filenames in os.walk(outdir):
+            if moc_name in filenames:
+                hits.append(os.path.join(dirpath, moc_name))
+        if not hits:
             return None
-        for sub in sorted(os.listdir(verdir)):
-            cand = os.path.join(verdir, sub, "bin", moc_name)
-            if os.path.isfile(cand):
-                return os.path.dirname(cand)
-        return None
+        # Prefer hits under the requested version dir.
+        ver = [h for h in hits if f"{os.sep}{args.version}{os.sep}" in h]
+        pick = sorted(ver or hits)[0]
+        return os.path.dirname(pick)
 
     bindir = find_bindir()
     if bindir:
@@ -214,10 +228,12 @@ def main():
         finally:
             shutil.rmtree(tmpdir, ignore_errors=True)
 
-    # Discover the real install dir (internal arch dir may differ in case).
+    # Discover the real install dir (payload layouts differ per host).
     bindir = find_bindir()
     if not bindir:
-        sys.exit(f"Install finished but no moc found under {os.path.join(outdir, args.version)}")
+        log(f"Install finished but no {moc_name} found under {outdir}:")
+        show_tree()
+        sys.exit("Qt install layout unrecognized")
     prefix = os.path.dirname(bindir)
     cmake_dir = os.path.join(prefix, "lib", "cmake", "Qt6")
     if not os.path.isdir(cmake_dir):

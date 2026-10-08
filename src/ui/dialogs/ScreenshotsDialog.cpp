@@ -13,6 +13,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QListWidget>
+#include <QLocale>
 #include <QMessageBox>
 #include <QPixmap>
 #include <QPushButton>
@@ -111,7 +112,7 @@ void ScreenshotsDialog::rebuild()
         auto *it = new QListWidgetItem(
             QStringLiteral("%1  ·  %2").arg(n, prettySize(fi.size())), m_list);
         it->setData(Qt::UserRole, full);
-        it->setToolTip(fi.lastModified().toString(Qt::DefaultLocaleShortDate));
+        it->setToolTip(QLocale().toString(fi.lastModified(), QLocale::ShortFormat));
     }
     m_list->blockSignals(false);
     if (m_list->count() > 0 && m_list->currentRow() < 0) {

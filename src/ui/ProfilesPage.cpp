@@ -68,7 +68,7 @@ ProfilesPage::ProfilesPage(AccountStore *accounts, InstanceManager *instances, M
             emit playRequested(QStringLiteral("import-mrpack:") + p);
         }
     });
-    menu->addAction(tr("CurseForge zip (best-effort)…"), this, [this] {
+    menu->addAction(tr("CurseForge zip…"), this, [this] {
         const QString p = QFileDialog::getOpenFileName(this, tr("Import CurseForge zip"), {}, tr("Zips (*.zip)"));
         if (!p.isEmpty()) {
             emit playRequested(QStringLiteral("import-curseforge:") + p);
@@ -230,15 +230,16 @@ void ProfilesPage::onContextMenu(const QPoint &pos)
     menu.addAction(tr("Play without mods once (safe mode)"), this,
                   [this, id] { emit playRequested(QStringLiteral("safe-mode:") + id); });
     menu.addSeparator();
-    menu.addAction(tr("Mods…"), this, [this, id] { emit modsRequested(id); });
+    menu.addAction(tr("Mods & packs…"), this, [this, id] { emit modsRequested(id); });
     menu.addAction(tr("Worlds & backups…"), this, [this, id] { emit worldsRequested(id); });
+    menu.addAction(tr("Screenshots…"), this, [this, id] { emit screenshotsRequested(id); });
     menu.addAction(tr("Settings…"), this, [this, id] { onSettings(id); });
     menu.addAction(tr("Switch loader / version…"), this, [this, id] { onSwitchLoader(id); });
     menu.addAction(tr("Undo last change"), this, [this, id] { emit undoRequested(id); });
     menu.addSeparator();
     menu.addAction(tr("Clone…"), this, [this, id] { onClone(id); });
     menu.addAction(tr("Rename…"), this, [this, id] { onRename(id); });
-    menu.addAction(tr("Export .hearthpack…"), this, [this, id] { onExport(id); });
+    menu.addAction(tr("Export…"), this, [this, id] { onExport(id); });
     menu.addSeparator();
     menu.addAction(tr("Delete…"), this, [this, id] { onDelete(id); });
     menu.exec(m_list->viewport()->mapToGlobal(pos));
@@ -373,14 +374,17 @@ void ProfilesPage::onRename(const QString &id)
 void ProfilesPage::onExport(const QString &id)
 {
     const Instance src = m_instances->get(id);
-    const QString p = QFileDialog::getSaveFileName(this, tr("Export “%1”").arg(src.name),
-                                                   QStringLiteral("%1.hearthpack").arg(src.id),
-                                                   tr("Hearthlight packs (*.hearthpack)"));
+    const QString p = QFileDialog::getSaveFileName(
+        this, tr("Export “%1”").arg(src.name), QStringLiteral("%1.hearthpack").arg(src.id),
+        tr("Hearthlight packs (*.hearthpack);;Modrinth packs (*.mrpack)"));
     if (p.isEmpty()) {
         return;
     }
     QString err;
-    if (!m_instances->exportHearthpack(id, p, &err)) {
+    const bool asMrpack = p.endsWith(QStringLiteral(".mrpack"), Qt::CaseInsensitive);
+    const bool ok = asMrpack ? m_instances->exportMrpack(id, p, &err)
+                             : m_instances->exportHearthpack(id, p, &err);
+    if (!ok) {
         QMessageBox::warning(this, tr("Couldn't export that profile"), err);
     } else {
         QMessageBox::information(this, tr("Exported"), tr("Saved to:\n%1").arg(p));

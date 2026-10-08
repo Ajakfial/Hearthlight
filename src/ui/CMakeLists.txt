@@ -21,6 +21,7 @@ add_library(HearthlightUi STATIC
     dialogs/InstanceSettingsDialog.h dialogs/InstanceSettingsDialog.cpp
     dialogs/TaskProgressDialog.h dialogs/TaskProgressDialog.cpp
     dialogs/InstalledModsDialog.h dialogs/InstalledModsDialog.cpp
+    dialogs/ScreenshotsDialog.h dialogs/ScreenshotsDialog.cpp
     dialogs/WorldsDialog.h dialogs/WorldsDialog.cpp
     dialogs/KindlingDialog.h dialogs/KindlingDialog.cpp
     resources/icons.qrc

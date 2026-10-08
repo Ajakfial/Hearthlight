@@ -72,8 +72,9 @@ src/core/   no widget includes. Testable without a GUI.
   MicrosoftAuth (device-code/browser, Xbox/XSTS/Minecraft chain, skins/capes)
   GamePaths, VersionModel (rules/args/classpath), MojangApi, ZipUtil (miniz)
   VersionInstaller, JavaManager (Temurin), Launcher (vanilla + loader-merged, Quick Play)
-  Instance, InstanceManager (.hearthpack/.mrpack/CurseForge), ModLoader (Fabric/Quilt/Forge/NeoForge)
-  ModrinthApi (v2 search/project/versions, dep resolution), ModManager (installed mods + updates)
+  Instance, InstanceManager (.hearthpack/.mrpack export+import, CurseForge full import with user API key), ModLoader (Fabric/Quilt/Forge/NeoForge)
+  ModrinthApi (v2 search/project/versions, dep resolution), CurseForgeApi (user-key file resolution),
+  ModManager (mods + resource/shader/datapacks + updates), ContentPack helpers in ModManager
   Embers (safe-update snapshots + undo), Hearthstones (world/config backups)
   CrashDoctor (plain-English crash diagnosis), Kindling (curated starter sets), Markdown (renderer)
 src/ui/     Theme, IconProvider, MainWindow shell (version + instance pipelines,
@@ -81,13 +82,14 @@ src/ui/     Theme, IconProvider, MainWindow shell (version + instance pipelines,
             pages (Hearth dashboard, Versions, Profiles, Discover/Modrinth,
             Accounts w/ skins-capes, Settings),
             dialogs (offline account, Microsoft login, instance wizard, instance settings,
-            mod manager, worlds/backups, Kindling setup, task progress),
+            content (mods + resource/shader/data packs), worlds/backups, screenshots,
+            Kindling setup, task progress),
             Campfire GameLogDialog, widgets, dialogs
 src/app/    main(), Application bootstrap (owns settings/store/tokens/services)
 tests/      Qt Test: offline UUID, account store, task system, version model,
             java manager / launch-token rules, Microsoft parsers/errors,
-            secure store, instances, loader metadata, Modrinth, Markdown,
-            installed mods, Embers, Crash Doctor, Hearthstones, Kindling
+            secure store, instances, loader metadata, Modrinth, CurseForge, Markdown,
+            installed mods, content packs, .mrpack export, Embers, Crash Doctor, Hearthstones, Kindling
 assets/     hand-written 24x24 SVGs (currentColor, 1.75px rounded strokes)
 packaging/  Windows NSIS installer + portable zip, macOS .dmg script,
             Linux AppImage script + Flatpak manifest (see Packaging below)
@@ -226,8 +228,12 @@ Each profile is an isolated instance (`instances/<id>/instance.json` plus
   Quick Play world/server/realm.
 - Import: Hearthlight `.hearthpack` (full round-trip), Modrinth `.mrpack`
   (overrides + URL downloads with SHA verification), CurseForge-style zip
-  (best-effort: local files install, remote file IDs are listed as skipped
-  because the CF CDN needs an API key we don't ship).
+  (full import when your API key is saved in **Settings → Mod sources** —
+  every `projectID`/`fileID` resolves via the CurseForge API and downloads
+  verified; without a key it installs local files and lists remote ones as
+  skipped, honestly).
+- Export: `.hearthpack` (everything) or `.mrpack` (Modrinth-known mods as
+  URL downloads, configs/packs/hand-added jars in `overrides/`).
 - Quick Play appends the official `--quickPlaySingleplayer/Multiplayer/Realms`
   flags on supported versions. Launching an authenticated online server with
   an offline profile asks for confirmation and explains the limitation.
@@ -259,11 +265,12 @@ version and loader, resolves required dependencies recursively, asks for
 confirmation (listing mods and notes), snapshots first via Embers, then
 downloads everything with SHA-512 verification into the right folder
 (`mods/`, `resourcepacks/`, `shaderpacks/`, `datapacks/`). Modpacks download
-as `.mrpack` and import as brand-new profiles. Each profile's **Mods…**
-dialog lists installed mods with on/off toggles, removal, update checks,
-manual-detection for hand-added jars, and Embers rollback. Drop a `.jar`
-onto a profile row to add it by hand. Offline, cached results are labeled
-as such; installs honestly need a connection.
+as `.mrpack` and import as brand-new profiles. Each profile's **Content…** dialog has four tabs: Mods (on/off toggles,
+removal, update checks, manual-detection for hand-added jars, Embers
+rollback) plus Resource packs, Shader packs and Data packs (`.zip` on/off
+toggles, add-by-hand, removal, open-folder). Drop a `.jar` onto a profile
+row to add it by hand. Offline, cached results are labeled as such;
+installs honestly need a connection.
 
 ## Curated mod lists (Kindling)
 
@@ -277,7 +284,7 @@ alongside the built-ins. Schema and rules in `docs/kindling.md`.
   playtime summary, and one gentle suggestion (mod updates get a Review
   button; offline shows a calm notice instead).
 - **Embers**: silent snapshots (mods + config, saves on loader switches)
-  before every change; “Undo last change” on profiles, in Mods…, and on the
+  before every change; “Undo last change” on profiles, in Content…, and on the
   Hearth. Today's state is preserved before every restore, and old snapshots
   prune to the last 5.
 - **Kindling**: first-run wizard (account → style → progress) building a
@@ -290,7 +297,11 @@ alongside the built-ins. Schema and rules in `docs/kindling.md`.
   launch when worlds changed (last 3 autos kept, manuals never pruned),
   manual named backups, restore with confirmation.
 - **Campfire log**: severity filter, search, Next-error jump, error/warning
-  counts, auto-scroll, copy — tokens always redacted.
+  counts, auto-scroll, copy, **Save to file**, **System info** copy for bug
+  reports, and **Share** (redacted upload to mclogs with a link) — tokens
+  always redacted.
+- **Screenshots**: per-profile browser (Profiles → Screenshots…) with
+  previews, open-folder, delete-to-trash and copy-path.
 - **Mod safe-mode**: “Play without mods once” hides `mods/` for a single
   launch and restores it on every exit path.
 - **Offline Hearth**: no network, no problem — installed versions, offline

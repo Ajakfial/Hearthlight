@@ -1,7 +1,9 @@
 #include "InstanceManager.h"
 
+#include "CurseForgeApi.h"
 #include "DownloadManager.h"
 #include "Logger.h"
+#include "ModManager.h"
 #include "Task.h"
 #include "ZipUtil.h"
 
@@ -14,7 +16,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
+#include <QSet>
 #include <QTemporaryDir>
+
+#include <functional>
 
 #ifdef Q_OS_WIN
 #include <qt_windows.h>
@@ -178,7 +183,8 @@ void InstanceManager::ensureGameDirs(const QString &id) const
     const QString game = instanceGameDir(m_dataDir, in);
     for (const auto &sub :
          { QStringLiteral(""), QStringLiteral("mods"), QStringLiteral("config"), QStringLiteral("saves"),
-           QStringLiteral("resourcepacks"), QStringLiteral("shaderpacks"), QStringLiteral("screenshots") }) {
+           QStringLiteral("resourcepacks"), QStringLiteral("shaderpacks"), QStringLiteral("datapacks"),
+           QStringLiteral("screenshots") }) {
         QDir().mkpath(sub.isEmpty() ? game : QDir(game).filePath(sub));
     }
 }
@@ -622,6 +628,122 @@ bool InstanceManager::importMrpackBlocking(const QString &zipPath, const QString
     return true;
 }
 
+bool InstanceManager::exportMrpack(const QString &id, const QString &zipPath, QString *error)
+{
+    const Instance in = get(id);
+    if (!in.isValid()) {
+        if (error) {
+            *error = tr("Profile not found.");
+        }
+        return false;
+    }
+    // Files that can be re-downloaded (Modrinth sidecars) become index
+    // entries; everything else rides along in overrides/.
+    ModManager mods(m_dataDir);
+    QSet<QString> downloadableMods;
+    QJsonArray files;
+    for (const auto &m : mods.listMods(id)) {
+        if (m.manual || m.fileUrl.isEmpty()) {
+            continue;
+        }
+        downloadableMods.insert(m.fileName);
+        // A disabled twin downloads enabled (the toggle is local state).
+        QString live = m.fileName;
+        if (live.endsWith(QStringLiteral(".disabled"))) {
+            live.chop(QStringLiteral(".disabled").size());
+        }
+        QJsonObject fo;
+        fo[QStringLiteral("path")] = QStringLiteral("mods/%1").arg(live);
+        QJsonObject hashes;
+        if (!m.sha512.isEmpty()) {
+            hashes[QStringLiteral("sha512")] = m.sha512;
+        }
+        fo[QStringLiteral("hashes")] = hashes;
+        QJsonObject env;
+        env[QStringLiteral("client")] = QStringLiteral("required");
+        env[QStringLiteral("server")] = QStringLiteral("required");
+        fo[QStringLiteral("env")] = env;
+        fo[QStringLiteral("downloads")] = QJsonArray{ m.fileUrl };
+        if (m.size > 0) {
+            fo[QStringLiteral("fileSize")] = (double)m.size;
+        }
+        files.append(fo);
+    }
+    QJsonObject deps;
+    deps[QStringLiteral("minecraft")] = in.versionId;
+    const QString lt = in.loaderType.toLower();
+    if (lt == QStringLiteral("fabric")) {
+        deps[QStringLiteral("fabric-loader")] =
+            in.loaderVersion.isEmpty() ? QStringLiteral("*") : in.loaderVersion;
+    } else if (lt == QStringLiteral("quilt")) {
+        deps[QStringLiteral("quilt-loader")] =
+            in.loaderVersion.isEmpty() ? QStringLiteral("*") : in.loaderVersion;
+    } else if (lt == QStringLiteral("forge")) {
+        deps[QStringLiteral("forge")] = in.loaderVersion.isEmpty() ? QStringLiteral("*") : in.loaderVersion;
+    } else if (lt == QStringLiteral("neoforge")) {
+        deps[QStringLiteral("neoforge")] = in.loaderVersion.isEmpty() ? QStringLiteral("*") : in.loaderVersion;
+    }
+    QJsonObject index;
+    index[QStringLiteral("formatVersion")] = 1;
+    index[QStringLiteral("game")] = QStringLiteral("minecraft");
+    index[QStringLiteral("versionId")] = QStringLiteral("1.0.0");
+    index[QStringLiteral("name")] = in.name;
+    index[QStringLiteral("summary")] = tr("Exported from Hearthlight.");
+    index[QStringLiteral("dependencies")] = deps;
+    index[QStringLiteral("files")] = files;
+
+    QList<QPair<QString, QByteArray>> entries;
+    entries.append({ QStringLiteral("modrinth.index.json"),
+                     QJsonDocument(index).toJson(QJsonDocument::Indented) });
+    const QString game = instanceGameDir(m_dataDir, in);
+    const QStringList roots = { QStringLiteral("config"), QStringLiteral("resourcepacks"),
+                                QStringLiteral("shaderpacks"), QStringLiteral("datapacks") };
+    for (const auto &root : roots) {
+        QDir d(QDir(game).filePath(root));
+        if (!d.exists()) {
+            continue;
+        }
+        QDirIterator it(d.absolutePath(), QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            it.next();
+            if (QFileInfo(it.filePath()).size() > 200 * 1024 * 1024) {
+                continue;
+            }
+            QFile f(it.filePath());
+            if (!f.open(QIODevice::ReadOnly)) {
+                continue;
+            }
+            entries.append({ QStringLiteral("overrides/%1/%2").arg(root, d.relativeFilePath(it.filePath())),
+                             f.readAll() });
+        }
+    }
+    // Manual (hand-added) mods travel in overrides so the pack still works.
+    QDir md(QDir(game).filePath(QStringLiteral("mods")));
+    if (md.exists()) {
+        QDirIterator it(md.absolutePath(), QDir::Files | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+        while (it.hasNext()) {
+            it.next();
+            const QString rel = md.relativeFilePath(it.filePath());
+            if (rel.startsWith(QStringLiteral(".hearth/"))) {
+                continue; // sidecars are launcher state, not pack content
+            }
+            const QString name = QFileInfo(it.filePath()).fileName();
+            if (downloadableMods.contains(name) || downloadableMods.contains(rel)) {
+                continue; // re-downloaded from files[] instead
+            }
+            if (QFileInfo(it.filePath()).size() > 200 * 1024 * 1024) {
+                continue;
+            }
+            QFile f(it.filePath());
+            if (!f.open(QIODevice::ReadOnly)) {
+                continue;
+            }
+            entries.append({ QStringLiteral("overrides/mods/%1").arg(rel), f.readAll() });
+        }
+    }
+    return ZipUtil::createZipFromEntries(zipPath, entries, error);
+}
+
 bool InstanceManager::importCurseforgeZip(const QString &zipPath, const QString &newName, QString *newIdOut,
                                           QString *error, QStringList *skippedRemote)
 {
@@ -707,6 +829,154 @@ bool InstanceManager::importCurseforgeZip(const QString &zipPath, const QString 
     if (newIdOut) {
         *newIdOut = m_instances.last().id;
     }
+    return true;
+}
+
+bool InstanceManager::importCurseforgeZipBlocking(const QString &zipPath, const QString &newName,
+                                                    const QString &apiKey, Task::Context &ctx, QString *newIdOut,
+                                                    QStringList *skippedOut)
+{
+    if (apiKey.trimmed().isEmpty()) {
+        // No key: honest best-effort fallback (local files only).
+        QString err;
+        QStringList skipped;
+        QString newId;
+        if (!importCurseforgeZip(zipPath, newName, &newId, &err, &skipped)) {
+            ctx.fail(err);
+            return false;
+        }
+        if (skippedOut) {
+            *skippedOut = skipped;
+        }
+        if (newIdOut) {
+            *newIdOut = newId;
+        }
+        ctx.report(1, 1, tr("Done"));
+        return true;
+    }
+    QTemporaryDir tmp;
+    if (!tmp.isValid()) {
+        ctx.fail(tr("Couldn't create a temporary folder."));
+        return false;
+    }
+    QString zerr;
+    if (!ZipUtil::extractZipFile(zipPath, tmp.path(), {}, &zerr)) {
+        ctx.fail(zerr);
+        return false;
+    }
+    QFile mf(QDir(tmp.path()).filePath(QStringLiteral("manifest.json")));
+    if (!mf.open(QIODevice::ReadOnly)) {
+        ctx.fail(tr("That file isn't a CurseForge-style pack (no manifest.json)."));
+        return false;
+    }
+    const QByteArray manifest = mf.readAll();
+    Instance in;
+    const QString fallbackName = CurseForgeMeta::manifestName(manifest);
+    in.name = newName.trimmed().isEmpty() ? fallbackName : newName.trimmed();
+    in.versionId = CurseForgeMeta::manifestMinecraftVersion(manifest);
+    in.loaderType = CurseForgeMeta::manifestLoaderType(manifest);
+    QString cerr;
+    if (!create(in, &cerr)) {
+        ctx.fail(cerr);
+        return false;
+    }
+    const QString newId = m_instances.last().id;
+    const QString game = instanceGameDir(m_dataDir, m_instances.last());
+    QString overDir;
+    for (const auto &cand : { QStringLiteral("overrides"), QStringLiteral("Overrides"), QStringLiteral("overridefiles") }) {
+        if (QDir(QDir(tmp.path()).filePath(cand)).exists()) {
+            overDir = QDir(tmp.path()).filePath(cand);
+            break;
+        }
+    }
+    // Local helper (mirrors copyDirRecursive above without exposing it).
+    std::function<bool(const QString &, const QString &, QString *)> copyTree =
+        [&](const QString &src, const QString &dst, QString *error) -> bool {
+        QDir().mkpath(dst);
+        QDir s(src);
+        if (!s.exists()) {
+            return true;
+        }
+        for (const auto &e : s.entryList(QDir::NoDotAndDotDot | QDir::AllEntries)) {
+            const QString sp = s.filePath(e);
+            const QString dp = QDir(dst).filePath(e);
+            QFileInfo fi(sp);
+            if (fi.isDir()) {
+                if (!copyTree(sp, dp, error)) {
+                    return false;
+                }
+            } else {
+                QDir().mkpath(QFileInfo(dp).absolutePath());
+                QFile::remove(dp);
+                if (!QFile::copy(sp, dp)) {
+                    if (error) {
+                        *error = QObject::tr("Couldn't copy %1.").arg(e);
+                    }
+                    return false;
+                }
+            }
+        }
+        return true;
+    };
+    if (!overDir.isEmpty() && !copyTree(overDir, game, &cerr)) {
+        ctx.fail(cerr);
+        return false;
+    }
+    // Resolve + download every manifest file via the CurseForge API.
+    // Per-file failures are collected as skipped entries (one bad file never
+    // kills a 200-file pack); only fatal problems fail the whole import.
+    const QList<QPair<int, qint64>> wanted = CurseForgeMeta::manifestFiles(manifest);
+    CurseForgeApi cf(m_dataDir, nullptr);
+    struct OneFileContext : public Task::Context {
+        Task::Context &outer;
+        QString fileError;
+        explicit OneFileContext(Task::Context &o)
+            : outer(o)
+        {
+        }
+        void report(qint64 r, qint64 t, const QString &m = {}) override { outer.report(r, t, m); }
+        bool isCancelled() const override { return outer.isCancelled(); }
+        void fail(const QString &m) override { fileError = m; }
+    };
+    QList<DownloadRequest> reqs;
+    QStringList skipped;
+    int done = 0;
+    for (const auto &pair : wanted) {
+        if (ctx.isCancelled()) {
+            ctx.fail(tr("Cancelled."));
+            return false;
+        }
+        ++done;
+        ctx.report(done, qMax(1, (int)wanted.size()),
+                   tr("Resolving CurseForge files… (%1/%2)").arg(done).arg(wanted.size()));
+        OneFileContext sub(ctx);
+        CurseForgeFile cfFile = cf.fileBlocking(pair.first, pair.second, apiKey, sub);
+        if (cfFile.downloadUrl.isEmpty() || cfFile.fileName.isEmpty()) {
+            const QString why = !sub.fileError.isEmpty() ? sub.fileError
+                                                         : tr("no download available");
+            skipped.append(tr("project %1 file %2 (%3)").arg(pair.first).arg(pair.second, why));
+            continue;
+        }
+        DownloadRequest req;
+        req.url = QUrl(cfFile.downloadUrl);
+        req.destPath = QDir(game).filePath(QStringLiteral("mods/%1").arg(cfFile.fileName));
+        req.expectedSize = cfFile.size;
+        reqs.append(req);
+    }
+    if (!reqs.isEmpty()) {
+        QString derr;
+        if (!DownloadManager::downloadManyBlocking(reqs, 8, ctx, &derr)) {
+            ctx.fail(derr);
+            return false;
+        }
+    }
+    if (skippedOut) {
+        *skippedOut = skipped;
+    }
+    if (newIdOut) {
+        *newIdOut = newId;
+    }
+    ctx.report(1, 1, tr("Done"));
     return true;
 }
 

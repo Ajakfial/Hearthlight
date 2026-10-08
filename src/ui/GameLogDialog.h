@@ -5,6 +5,8 @@
 class QComboBox;
 class QLabel;
 class QLineEdit;
+class QNetworkAccessManager;
+class QNetworkReply;
 class QPlainTextEdit;
 class QProcess;
 class QPushButton;
@@ -12,6 +14,9 @@ class QPushButton;
 // Campfire log — the friendly live console while the game runs (spec 10.6).
 // Streams stdout/stderr with severity filter, search, error navigation and
 // auto-scroll, shows the exit code, offers Copy, and never prints tokens.
+// Share uploads a redacted copy to mclo.gs (needs internet); Save writes the
+// redacted log to a file; System info copies OS/Qt/launcher details for bug
+// reports.
 class GameLogDialog : public QDialog {
     Q_OBJECT
 public:
@@ -29,6 +34,10 @@ private slots:
     void onFinished(int code);
     void onStop();
     void onCopy();
+    void onSave();
+    void onCopySysInfo();
+    void onShare();
+    void onShareFinished();
     void applyFilter();
     void onNextError();
 
@@ -39,6 +48,9 @@ private:
     QString m_version;
     QString m_gameDir;
     QProcess *m_proc = nullptr;
+    QNetworkAccessManager *m_net = nullptr;
+    QNetworkReply *m_shareReply = nullptr;
+    QPushButton *m_shareBtn = nullptr;
     qint64 m_startMs = 0;
     QPlainTextEdit *m_view = nullptr;
     QLineEdit *m_search = nullptr;

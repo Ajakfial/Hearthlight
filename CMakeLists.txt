@@ -51,3 +51,28 @@ add_subdirectory(src/app)
 if(HEARTHLIGHT_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
+
+# Translations: compile translations/*.ts into .qm with Qt Linguist when
+# available (CI and full Qt installs). The .qm files land in
+# <build>/translations/ and install next to the binary; at runtime the app
+# loads :/i18n first, then <dataDir>/translations/hearthlight_<code>.qm, so
+# dropping a .qm there is always enough. Missing tools = graceful skip.
+find_package(Qt6 6.5 QUIET OPTIONAL_COMPONENTS LinguistTools)
+file(GLOB HEARTHLIGHT_TS_FILES "${CMAKE_SOURCE_DIR}/translations/*.ts")
+if(TARGET Qt6::lrelease AND HEARTHLIGHT_TS_FILES)
+    set(HEARTHLIGHT_QM_FILES)
+    foreach(ts ${HEARTHLIGHT_TS_FILES})
+        get_filename_component(stem "${ts}" NAME_WE)
+        set(qm "${CMAKE_BINARY_DIR}/translations/${stem}.qm")
+        add_custom_command(
+            OUTPUT "${qm}"
+            COMMAND Qt6::lrelease "${ts}" -qm "${qm}"
+            DEPENDS "${ts}"
+            COMMENT "lrelease ${stem}"
+            VERBATIM
+        )
+        list(APPEND HEARTHLIGHT_QM_FILES "${qm}")
+    endforeach()
+    add_custom_target(hearthlight_translations ALL DEPENDS ${HEARTHLIGHT_QM_FILES})
+    install(FILES ${HEARTHLIGHT_QM_FILES} DESTINATION translations OPTIONAL)
+endif()

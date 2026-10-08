@@ -3,6 +3,11 @@
 Hearthlight is written in English. Every user-visible string goes through
 Qt's `tr()`, so the whole UI can be translated without touching code.
 
+Shipped in `translations/`: German (`de`), French (`fr`), Spanish (`es`).
+They compile to `.qm` automatically during a normal build whenever Qt
+Linguist tools are present (CI always has them); without those tools the
+build simply skips translations and stays English.
+
 ## Using a translation
 
 1. Put the compiled file in the translations folder, named with a Qt locale

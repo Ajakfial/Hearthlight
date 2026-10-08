@@ -3,6 +3,7 @@
 #include "AccountsPage.h"
 #include "AppSettings.h"
 #include "CrashDoctor.h"
+#include "CurseForgeApi.h"
 #include "DiscoverPage.h"
 #include "Embers.h"
 #include "GameLogDialog.h"
@@ -30,6 +31,7 @@
 #include "VersionsPage.h"
 #include "dialogs/InstalledModsDialog.h"
 #include "dialogs/KindlingDialog.h"
+#include "dialogs/ScreenshotsDialog.h"
 #include "dialogs/TaskProgressDialog.h"
 #include "dialogs/WorldsDialog.h"
 #include "widgets/AccountSwitcher.h"
@@ -190,12 +192,14 @@ MainWindow::MainWindow(AppSettings *settings, AccountStore *store, Theme *theme,
     m_stack->addWidget(new AccountsPage(store, dataDir, tokens, microsoft, m_stack));
     auto *settingsPage = new SettingsPage(settings, store, theme, m_stack);
     settingsPage->setJavaManager(java);
+    settingsPage->setTokenStore(tokens);
     m_stack->addWidget(settingsPage);
     connect(m_versions, &VersionsPage::versionSelected, this, &MainWindow::onVersionSelected);
     connect(m_versions, &VersionsPage::playRequested, this, &MainWindow::onPlayRequested);
     connect(m_profiles, &ProfilesPage::playRequested, this, &MainWindow::onPlayRequested);
     connect(m_profiles, &ProfilesPage::modsRequested, this, &MainWindow::openMods);
     connect(m_profiles, &ProfilesPage::worldsRequested, this, &MainWindow::openWorlds);
+    connect(m_profiles, &ProfilesPage::screenshotsRequested, this, &MainWindow::openScreenshots);
     connect(m_profiles, &ProfilesPage::undoRequested, this, &MainWindow::runUndo);
     connect(m_profiles, &ProfilesPage::jarsDropped, this, &MainWindow::addJars);
     connect(m_hearth, &HearthPage::playRequested, this, &MainWindow::onPlayRequested);
@@ -970,16 +974,26 @@ void MainWindow::importPack(const QString &kindAndPath)
                 return m_instances->importMrpackBlocking(path, name.trimmed(), ctx, nullptr);
             }
             if (kind == QStringLiteral("import-curseforge")) {
-                QString newId, err;
+                const QString apiKey =
+                    m_tokens ? m_tokens->token(CurseForgeMeta::storeAccountId(), CurseForgeMeta::storeKey())
+                             : QString();
+                QString newId;
                 QStringList skipped;
-                if (!m_instances->importCurseforgeZip(path, name.trimmed(), &newId, &err, &skipped)) {
-                    ctx.fail(err);
+                if (!m_instances->importCurseforgeZipBlocking(path, name.trimmed(), apiKey, ctx, &newId,
+                                                              &skipped)) {
                     return false;
                 }
                 if (!skipped.isEmpty()) {
                     Logger::warning(QStringLiteral("CurseForge import skipped %1 remote file(s).").arg(skipped.size()));
+                    // Surface the skipped list in the task message, not just the log.
+                    ctx.report(1, 1,
+                               apiKey.trimmed().isEmpty()
+                                   ? tr("Done — %1 file(s) need a CurseForge API key (Settings → Mod sources).")
+                                         .arg(skipped.size())
+                                   : tr("Done — %1 file(s) skipped, see log.").arg(skipped.size()));
+                } else {
+                    ctx.report(1, 1, tr("Done"));
                 }
-                ctx.report(1, 1, tr("Done"));
                 return true;
             }
             ctx.fail(tr("Unknown import."));
@@ -1026,6 +1040,15 @@ void MainWindow::openWorlds(const QString &instanceId)
         return;
     }
     WorldsDialog dlg(instanceId, m_instances, m_stones, m_dataDir, this);
+    dlg.exec();
+}
+
+void MainWindow::openScreenshots(const QString &instanceId)
+{
+    if (!m_instances->has(instanceId)) {
+        return;
+    }
+    ScreenshotsDialog dlg(instanceId, m_instances, m_dataDir, this);
     dlg.exec();
 }
 
@@ -1089,7 +1112,7 @@ void MainWindow::addJars(const QString &instanceId, const QStringList &jarPaths)
                              added.isEmpty() ? QString() : tr("Added: %1").arg(added.join(QStringLiteral(", "))));
     } else {
         QMessageBox::information(this, tr("Mods added"),
-                                 tr("Added %1 to “%2”. They show as “added by hand” in Mods….").arg(added.join(QStringLiteral(", ")), in.name));
+                                 tr("Added %1 to “%2”. They show as “added by hand” in Content….").arg(added.join(QStringLiteral(", ")), in.name));
     }
     m_profiles->rebuild();
 }

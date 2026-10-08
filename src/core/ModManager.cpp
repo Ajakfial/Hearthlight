@@ -261,4 +261,184 @@ QList<ModUpdate> ModManager::checkUpdatesBlocking(const QString &instanceId, con
     return out;
 }
 
+QString ModManager::contentDir(const QString &dataDir, const QString &instanceId, const QString &folder)
+{
+    return QDir(QDir(dataDir).filePath(QStringLiteral("instances/%1/game/%2").arg(instanceId, folder))).absolutePath();
+}
+
+QStringList ModManager::contentExtensions(const QString &folder)
+{
+    Q_UNUSED(folder);
+    // Resource/shader/datapacks are all .zip in practice; datapacks can also
+    // be plain folders (listed separately below).
+    return { QStringLiteral("*.zip"), QStringLiteral("*.zip.disabled") };
+}
+
+QList<InstalledMod> ModManager::listContent(const QString &instanceId, const QString &folder) const
+{
+    QList<InstalledMod> out;
+    const QString dir = contentDir(m_dataDir, instanceId, folder);
+    QDir d(dir);
+    if (!d.exists()) {
+        return out;
+    }
+    const QStringList files = d.entryList(contentExtensions(folder), QDir::Files, QDir::Name);
+    for (const auto &f : files) {
+        InstalledMod m;
+        m.fileName = f;
+        m.enabled = !f.endsWith(QStringLiteral(".disabled"));
+        QString base = f;
+        if (!m.enabled) {
+            base.chop(QStringLiteral(".disabled").size());
+        }
+        if (base.endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive)) {
+            base.chop(4);
+        }
+        m.baseName = base;
+        m.title = base;
+        m.manual = true;
+        m.size = QFileInfo(QDir(dir).filePath(f)).size();
+        out.append(m);
+    }
+    // Plain unpacked folders (resource packs especially ship this way).
+    const QStringList dirs = d.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    for (const auto &sub : dirs) {
+        if (sub == QStringLiteral(".hearth")) {
+            continue;
+        }
+        InstalledMod m;
+        m.fileName = sub;
+        m.baseName = sub;
+        m.title = sub;
+        m.manual = true;
+        m.enabled = true;
+        out.append(m);
+    }
+    return out;
+}
+
+bool ModManager::setContentEnabled(const QString &instanceId, const QString &folder, const QString &fileName,
+                                    bool enabled, QString *error)
+{
+    const QString dir = contentDir(m_dataDir, instanceId, folder);
+    const QString src = QDir(dir).filePath(fileName);
+    if (!QFile::exists(src) && !QDir(src).exists()) {
+        if (error) {
+            *error = tr("That file is gone already.");
+        }
+        return false;
+    }
+    if (QDir(src).exists()) {
+        if (error) {
+            *error = tr("Unpacked folders can't be toggled — zip the pack first, or remove it.");
+        }
+        return false;
+    }
+    const bool isDisabled = fileName.endsWith(QStringLiteral(".disabled"));
+    if (enabled == !isDisabled) {
+        return true;
+    }
+    QString dst;
+    if (enabled) {
+        dst = src.left(src.size() - QStringLiteral(".disabled").size());
+    } else {
+        dst = src + QStringLiteral(".disabled");
+    }
+    if (QFile::exists(dst)) {
+        if (error) {
+            *error = tr("Can't toggle: “%1” already exists.").arg(QFileInfo(dst).fileName());
+        }
+        return false;
+    }
+    if (!QFile::rename(src, dst)) {
+        if (error) {
+            *error = tr("Couldn't rename the file (is the game running?).");
+        }
+        return false;
+    }
+    emit modsChanged(instanceId);
+    return true;
+}
+
+bool ModManager::removeContent(const QString &instanceId, const QString &folder, const QString &fileName,
+                               QString *error)
+{
+    const QString dir = contentDir(m_dataDir, instanceId, folder);
+    const QString path = QDir(dir).filePath(fileName);
+    if (QDir(path).exists()) {
+        auto rc = QDir(path).removeRecursively();
+        if (!rc) {
+            if (error) {
+                *error = tr("Couldn't remove that folder.");
+            }
+            return false;
+        }
+        emit modsChanged(instanceId);
+        return true;
+    }
+    if (!QFile::exists(path)) {
+        if (error) {
+            *error = tr("That file is gone already.");
+        }
+        return false;
+    }
+#if QT_VERSION >= QT_VERSION_CHECK(5, 15, 0)
+    if (!QFile::moveToTrash(path)) {
+        QFile::remove(path);
+    }
+#else
+    QFile::remove(path);
+#endif
+    emit modsChanged(instanceId);
+    return true;
+}
+
+bool ModManager::addExternalPack(const QString &instanceId, const QString &folder, const QString &filePath,
+                                 const QStringList &extensions, QString *error, QString *addedName)
+{
+    QFileInfo src(filePath);
+    if (!src.exists() || !src.isFile()) {
+        if (error) {
+            *error = tr("That file doesn't exist.");
+        }
+        return false;
+    }
+    bool okExt = extensions.isEmpty();
+    for (const auto &pat : extensions) {
+        QString suffix = pat;
+        suffix.remove(QLatin1Char('*'));
+        suffix.remove(QStringLiteral(".disabled"));
+        if (!suffix.isEmpty() && src.fileName().endsWith(suffix, Qt::CaseInsensitive)) {
+            okExt = true;
+            break;
+        }
+    }
+    if (!okExt) {
+        if (error) {
+            *error = tr("That isn't a %1 file (%2).").arg(folder, extensions.join(QStringLiteral(", ")));
+        }
+        return false;
+    }
+    const QString dir = contentDir(m_dataDir, instanceId, folder);
+    QDir().mkpath(dir);
+    const QString dst = QDir(dir).filePath(src.fileName());
+    if (QFile::exists(dst) || QFile::exists(dst + QStringLiteral(".disabled"))) {
+        if (error) {
+            *error = tr("“%1” is already in this profile's %2.").arg(src.fileName(), folder);
+        }
+        return false;
+    }
+    if (!QFile::copy(filePath, dst)) {
+        if (error) {
+            *error = tr("Couldn't copy that file into the profile.");
+        }
+        return false;
+    }
+    if (addedName) {
+        *addedName = src.fileName();
+    }
+    emit modsChanged(instanceId);
+    return true;
+}
+
 #include "ModManager.moc"

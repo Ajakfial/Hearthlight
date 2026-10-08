@@ -57,6 +57,7 @@ private slots:
     void openLog();
     void openMods(const QString &instanceId);
     void openWorlds(const QString &instanceId);
+    void openScreenshots(const QString &instanceId);
     void runUndo(const QString &instanceId);
     void addJars(const QString &instanceId, const QStringList &jarPaths);
     void onModpackFile(const QString &mrpackPath);

@@ -2,9 +2,11 @@
 
 #include "AccountStore.h"
 #include "AppSettings.h"
+#include "CurseForgeApi.h"
 #include "DownloadManager.h"
 #include "IconProvider.h"
 #include "JavaManager.h"
+#include "SecureTokenStore.h"
 #include "Theme.h"
 
 #include <QColorDialog>
@@ -193,6 +195,42 @@ SettingsPage::SettingsPage(AppSettings *settings, AccountStore *store, Theme *th
     df->addRow(clearBtn);
     lay->addWidget(dl);
 
+    // ---- Mod sources ----
+    auto *src = new QGroupBox(tr("Mod sources"), body);
+    auto *sf = new QFormLayout(src);
+    m_cfKeyEdit = new QLineEdit(src);
+    m_cfKeyEdit->setEchoMode(QLineEdit::Password);
+    m_cfKeyEdit->setPlaceholderText(tr("Paste your CurseForge API key…"));
+    m_cfKeyEdit->setToolTip(tr("Stored in the OS credential store, never in plain files."));
+    sf->addRow(tr("CurseForge API key"), m_cfKeyEdit);
+    auto *cfRow = new QHBoxLayout();
+    auto *cfSave = new QPushButton(tr("Save key"), src);
+    connect(cfSave, &QPushButton::clicked, this, &SettingsPage::saveCurseForgeKey);
+    cfRow->addWidget(cfSave);
+    auto *cfClear = new QPushButton(tr("Remove key"), src);
+    connect(cfClear, &QPushButton::clicked, this, &SettingsPage::clearCurseForgeKey);
+    cfRow->addWidget(cfClear);
+    auto *cfTest = new QPushButton(tr("Refresh status"), src);
+    connect(cfTest, &QPushButton::clicked, this, &SettingsPage::refreshCurseForgeKeyState);
+    cfRow->addWidget(cfTest);
+    cfRow->addStretch(1);
+    sf->addRow(cfRow);
+    m_cfKeyState = new QLabel(src);
+    m_cfKeyState->setObjectName(QStringLiteral("secondary"));
+    m_cfKeyState->setWordWrap(true);
+    sf->addRow(m_cfKeyState);
+    auto *cfNote = new QLabel(tr("Optional. Needed only for full CurseForge pack imports — without it, "
+                                 "remote files are listed as skipped. Get a free key at "
+                                 "console.curseforge.com, then paste it here. The key lives in your "
+                                 "OS credential store (Windows Credential Manager / macOS Keychain / "
+                                 "Linux Secret Service), the same place Microsoft sign-in tokens live."),
+                              src);
+    cfNote->setObjectName(QStringLiteral("secondary"));
+    cfNote->setWordWrap(true);
+    cfNote->setOpenExternalLinks(true);
+    sf->addRow(cfNote);
+    lay->addWidget(src);
+
     // ---- Privacy ----
     auto *priv = new QGroupBox(tr("Privacy"), body);
     auto *pl = new QVBoxLayout(priv);
@@ -286,6 +324,65 @@ void SettingsPage::setJavaManager(JavaManager *jm)
 {
     m_java = jm;
     refreshJavaList();
+}
+
+void SettingsPage::setTokenStore(SecureTokenStore *tokens)
+{
+    m_tokens = tokens;
+    refreshCurseForgeKeyState();
+}
+
+void SettingsPage::saveCurseForgeKey()
+{
+    if (!m_tokens) {
+        QMessageBox::warning(this, tr("Not ready"), tr("The credential store isn't ready yet."));
+        return;
+    }
+    const QString key = m_cfKeyEdit ? m_cfKeyEdit->text().trimmed() : QString();
+    if (key.isEmpty()) {
+        QMessageBox::information(this, tr("CurseForge key"), tr("Paste a key first."));
+        return;
+    }
+    if (!m_tokens->setToken(CurseForgeMeta::storeAccountId(), CurseForgeMeta::storeKey(), key)) {
+        QMessageBox::warning(this, tr("Couldn't save"), tr("The key couldn't be stored."));
+        return;
+    }
+    if (m_cfKeyEdit) {
+        m_cfKeyEdit->clear();
+    }
+    refreshCurseForgeKeyState();
+    QMessageBox::information(this, tr("Saved"),
+                             tr("CurseForge key saved in %1.").arg(m_tokens->backendName()));
+}
+
+void SettingsPage::clearCurseForgeKey()
+{
+    if (!m_tokens) {
+        return;
+    }
+    m_tokens->clearToken(CurseForgeMeta::storeAccountId(), CurseForgeMeta::storeKey());
+    if (m_cfKeyEdit) {
+        m_cfKeyEdit->clear();
+    }
+    refreshCurseForgeKeyState();
+}
+
+void SettingsPage::refreshCurseForgeKeyState()
+{
+    if (!m_cfKeyState) {
+        return;
+    }
+    if (!m_tokens) {
+        m_cfKeyState->setText(tr("Credential store not ready."));
+        return;
+    }
+    const QString key = m_tokens->token(CurseForgeMeta::storeAccountId(), CurseForgeMeta::storeKey());
+    if (key.isEmpty()) {
+        m_cfKeyState->setText(tr("No key saved — CurseForge imports install local files only."));
+    } else {
+        m_cfKeyState->setText(tr("Key saved in %1 (…%2). Full CurseForge imports enabled.")
+                                  .arg(m_tokens->backendName(), key.right(4)));
+    }
 }
 
 void SettingsPage::refreshJavaList()

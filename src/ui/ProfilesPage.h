@@ -16,7 +16,7 @@ struct GamePaths;
 // Real profiles page (spec 7): cards with playtime/last-played/account/mods,
 // New/Edit/Clone/Rename/Export/Delete (trash + confirm), drag-reorder,
 // collections filter, per-instance account display, Quick Play badges,
-// import/export (.hearthpack, .mrpack, CurseForge best-effort),
+// import/export (.hearthpack, .mrpack, CurseForge with user API key),
 // loader/version switching with backup + incompatible-mods warning.
 class ProfilesPage : public QWidget {
     Q_OBJECT
@@ -29,6 +29,7 @@ signals:
     void playRequested(const QString &instanceId);
     void modsRequested(const QString &instanceId);
     void worldsRequested(const QString &instanceId);
+    void screenshotsRequested(const QString &instanceId);
     void undoRequested(const QString &instanceId);
     void jarsDropped(const QString &instanceId, const QStringList &jarPaths);
     void changed();

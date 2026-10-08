@@ -42,6 +42,7 @@ add_library(HearthlightCore STATIC
     InstanceManager.h InstanceManager.cpp
     ModLoader.h ModLoader.cpp
     ModrinthApi.h ModrinthApi.cpp
+    CurseForgeApi.h CurseForgeApi.cpp
     ModManager.h ModManager.cpp
     Embers.h Embers.cpp
     Hearthstones.h Hearthstones.cpp

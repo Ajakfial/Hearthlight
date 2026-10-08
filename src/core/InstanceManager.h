@@ -14,8 +14,8 @@ class Task;
 //
 // Create via wizard, clone/rename/export/delete (trash), drag-reorder,
 // groups, per-instance settings, Quick Play, import/export (.hearthpack,
-// .mrpack, CurseForge-style best-effort). Offline profiles launch without
-// internet as long as everything required is cached.
+// .mrpack, CurseForge full import with a user API key). Offline profiles
+// launch without internet as long as everything required is cached.
 class InstanceManager : public QObject {
     Q_OBJECT
 public:
@@ -51,11 +51,22 @@ public:
     // Blocking: downloads file list inside ctx. Offline fails honestly.
     bool importMrpackBlocking(const QString &zipPath, const QString &newName, Task::Context &ctx,
                               QString *newIdOut = nullptr);
+    // Export this profile as a Modrinth .mrpack (modrinth.index.json +
+    // overrides/). Modrinth-known mods become URL downloads; everything else
+    // (configs, packs, hand-added jars) rides along in overrides/.
+    bool exportMrpack(const QString &id, const QString &zipPath, QString *error);
     // CurseForge-style zip (manifest.json + overrides): best-effort local
     // extraction only (CF file CDN needs an API key we don't ship). Files
     // already in the zip are installed; remote files are listed as skipped.
     bool importCurseforgeZip(const QString &zipPath, const QString &newName, QString *newIdOut, QString *error,
                              QStringList *skippedRemote = nullptr);
+    // Full CurseForge import with a user-supplied API key: resolves every
+    // (projectID, fileID) via the CurseForge API and downloads the files.
+    // Blocking on a Task worker thread. Empty apiKey falls back to the
+    // best-effort local import above.
+    bool importCurseforgeZipBlocking(const QString &zipPath, const QString &newName, const QString &apiKey,
+                                      Task::Context &ctx, QString *newIdOut = nullptr,
+                                      QStringList *skippedOut = nullptr);
 
     // Safety backup before loader/version switches: copies mods+config+saves.
     // Returns the backup dir (empty on failure).

@@ -12,9 +12,10 @@ class QLabel;
 class QListWidget;
 class QListWidgetItem;
 
-// Per-profile installed-mods tab (spec 9): icon/name/version list, toggle
+// Per-profile content dialog: Mods tab (icon/name/version list, toggle
 // on/off, remove, open folder, update badges + update-all, manual detection,
-// and rollback through Embers snapshots.
+// rollback through Embers) plus Resource packs / Shader packs / Data packs
+// tabs (zip on/off toggles, add by hand, remove, open folder).
 class InstalledModsDialog : public QDialog {
     Q_OBJECT
 public:
@@ -23,6 +24,7 @@ public:
 
 private slots:
     void rebuild();
+    void rebuildPacks();
     void onToggle();
     void onRemove();
     void onOpenFolder();
@@ -30,6 +32,11 @@ private slots:
     void onUpdateAll();
     void onUndo();
     void onSelectionChanged();
+    void onPackTabChanged(int idx);
+    void onPackAdd();
+    void onPackToggle();
+    void onPackRemove();
+    void onPackOpenFolder();
 
 private:
     QString instanceName() const;
@@ -46,4 +53,13 @@ private:
     QLabel *m_status = nullptr;
     QLabel *m_updates = nullptr;
     QList<ModUpdate> m_pending;
+
+    class QTabWidget *m_tabs = nullptr;
+    QListWidget *m_packsList = nullptr;
+    QListWidget *m_shadersList = nullptr;
+    QListWidget *m_dataList = nullptr;
+    QLabel *m_packHint = nullptr;
+
+    QString currentPackFolder() const;
+    QListWidget *currentPackList() const;
 };

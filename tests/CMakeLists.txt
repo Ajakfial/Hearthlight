@@ -25,6 +25,8 @@ hearth_test(tst_hearthstones tst_Hearthstones.cpp)
 hearth_test(tst_kindling tst_Kindling.cpp)
 hearth_test(tst_settings tst_Settings.cpp)
 hearth_test(tst_offline_mode tst_OfflineMode.cpp)
+hearth_test(tst_curseforge tst_CurseForge.cpp)
+hearth_test(tst_packs tst_Packs.cpp)
 
 # Icon test links the UI lib (resource + provider) and the repo root for SVG files.
 add_executable(tst_icons tst_Icons.cpp)

@@ -44,6 +44,22 @@ public:
     static QString sidecarDir(const QString &dataDir, const QString &instanceId);
     static QString sidecarPath(const QString &dataDir, const QString &instanceId, const QString &baseName);
 
+    // --- Content packs (resourcepacks / shaderpacks / datapacks) ---
+    // Same on-disk conventions as mods: *.zip (+ *.zip.disabled to turn off),
+    // listed synchronously with no network. Datapacks staged here can be
+    // copied into a world's datapacks folder; resource/shader packs apply
+    // directly from these folders.
+    static QString contentDir(const QString &dataDir, const QString &instanceId, const QString &folder);
+    QList<InstalledMod> listContent(const QString &instanceId, const QString &folder) const;
+    bool setContentEnabled(const QString &instanceId, const QString &folder, const QString &fileName, bool enabled,
+                           QString *error = nullptr);
+    bool removeContent(const QString &instanceId, const QString &folder, const QString &fileName,
+                       QString *error = nullptr);
+    // extensions like {"*.zip"}; accepts a file path, copies it in.
+    bool addExternalPack(const QString &instanceId, const QString &folder, const QString &filePath,
+                         const QStringList &extensions, QString *error = nullptr, QString *addedName = nullptr);
+    static QStringList contentExtensions(const QString &folder);
+
     // Enable/disable (rename) and remove (to trash when possible).
     bool setEnabled(const QString &instanceId, const QString &fileName, bool enabled, QString *error = nullptr);
     bool removeMod(const QString &instanceId, const QString &fileName, QString *error = nullptr);

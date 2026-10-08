@@ -1,6 +1,8 @@
 #include "GameLogDialog.h"
 
+#include "Constants.h"
 #include "Logger.h"
+#include "NetworkStatus.h"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -8,14 +10,23 @@
 #include <QComboBox>
 #include <QDateTime>
 #include <QDesktopServices>
+#include <QFile>
+#include <QFileDialog>
 #include <QFont>
 #include <QHBoxLayout>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QMessageBox>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QScrollBar>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
+#include <QSysInfo>
 #include <QTextBlock>
 #include <QTextCursor>
 #include <QUrl>
@@ -52,8 +63,21 @@ GameLogDialog::GameLogDialog(const QString &versionId, QWidget *parent)
     connect(autoBox, &QCheckBox::toggled, this, [this](bool v) { m_auto = v; });
     top->addWidget(autoBox);
     auto *copyBtn = new QPushButton(tr("Copy"), this);
+    copyBtn->setToolTip(tr("Copy the whole log to the clipboard."));
     connect(copyBtn, &QPushButton::clicked, this, &GameLogDialog::onCopy);
     top->addWidget(copyBtn);
+    auto *saveBtn = new QPushButton(tr("Save…"), this);
+    saveBtn->setToolTip(tr("Save the (redacted) log to a file."));
+    connect(saveBtn, &QPushButton::clicked, this, &GameLogDialog::onSave);
+    top->addWidget(saveBtn);
+    auto *sysBtn = new QPushButton(tr("System info"), this);
+    sysBtn->setToolTip(tr("Copy OS + launcher details for bug reports."));
+    connect(sysBtn, &QPushButton::clicked, this, &GameLogDialog::onCopySysInfo);
+    top->addWidget(sysBtn);
+    m_shareBtn = new QPushButton(tr("Share…"), this);
+    m_shareBtn->setToolTip(tr("Upload a redacted copy to mclo.gs and get a link."));
+    connect(m_shareBtn, &QPushButton::clicked, this, &GameLogDialog::onShare);
+    top->addWidget(m_shareBtn);
     lay->addLayout(top);
 
     m_view = new QPlainTextEdit(this);
@@ -197,6 +221,96 @@ void GameLogDialog::detach()
 void GameLogDialog::onCopy()
 {
     QApplication::clipboard()->setText(m_view->toPlainText());
+    m_status->setText(tr("Copied the log to the clipboard."));
+}
+
+QString systemInfoBlock(const QString &version)
+{
+    return QStringLiteral("Hearthlight %1 | %2 | %3 | Qt %4 | %5")
+        .arg(QString::fromLatin1(Hearthlight::kAppVersion), QSysInfo::prettyProductName(),
+             QSysInfo::currentCpuArchitecture(), QString::fromLatin1(qVersion()), version);
+}
+
+void GameLogDialog::onSave()
+{
+    const QString p = QFileDialog::getSaveFileName(this, tr("Save log"), QStringLiteral("hearthlight-log.txt"),
+                                                   tr("Text files (*.txt *.log)"));
+    if (p.isEmpty()) {
+        return;
+    }
+    QFile f(p);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QMessageBox::warning(this, tr("Couldn't save"), tr("Couldn't write to that file."));
+        return;
+    }
+    f.write((systemInfoBlock(m_version) + QStringLiteral("\n\n") + m_view->toPlainText()).toUtf8());
+    m_status->setText(tr("Saved to %1.").arg(p));
+}
+
+void GameLogDialog::onCopySysInfo()
+{
+    QApplication::clipboard()->setText(systemInfoBlock(m_version));
+    m_status->setText(tr("Copied system info — paste it into your bug report."));
+}
+
+void GameLogDialog::onShare()
+{
+    if (m_shareReply) {
+        return; // upload already in flight
+    }
+    if (NetworkStatus::instance().isEffectivelyOffline()) {
+        QMessageBox::information(this, tr("Offline"),
+                                 tr("Sharing needs internet. Save the log instead — it works offline."));
+        return;
+    }
+    const QString body = Logger::redacted(m_view->toPlainText()).trimmed();
+    if (body.isEmpty()) {
+        QMessageBox::information(this, tr("Nothing to share"), tr("The log is empty so far."));
+        return;
+    }
+    if (!m_net) {
+        m_net = new QNetworkAccessManager(this);
+    }
+    QNetworkRequest req(QUrl(QStringLiteral("https://api.mclo.gs/1/log")));
+    req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/x-www-form-urlencoded"));
+    req.setHeader(QNetworkRequest::UserAgentHeader, Hearthlight::userAgent());
+    const QByteArray payload = "content=" + QUrl::toPercentEncoding(body.left(1024 * 1024));
+    m_shareReply = m_net->post(req, payload);
+    connect(m_shareReply, &QNetworkReply::finished, this, &GameLogDialog::onShareFinished);
+    m_shareBtn->setEnabled(false);
+    m_status->setText(tr("Uploading a redacted copy to mclo.gs…"));
+}
+
+void GameLogDialog::onShareFinished()
+{
+    QNetworkReply *reply = m_shareReply;
+    m_shareReply = nullptr;
+    if (m_shareBtn) {
+        m_shareBtn->setEnabled(true);
+    }
+    if (!reply) {
+        return;
+    }
+    reply->deleteLater();
+    if (reply->error() != QNetworkReply::NoError) {
+        m_status->setText(tr("Share failed (%1) — Save works offline.").arg(reply->errorString()));
+        return;
+    }
+    QJsonParseError e{};
+    const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll(), &e);
+    const QJsonObject o = doc.isObject() ? doc.object() : QJsonObject{};
+    const bool ok = o.value(QStringLiteral("success")).toBool(false);
+    const QString url = o.value(QStringLiteral("url")).toString();
+    if (!ok || url.isEmpty()) {
+        m_status->setText(tr("mclo.gs didn't accept that log — Save works instead."));
+        return;
+    }
+    QApplication::clipboard()->setText(url);
+    m_status->setText(tr("Shared! Link copied: %1").arg(url));
+    auto rc = QMessageBox::question(this, tr("Log shared"), tr("Link copied:\n%1\n\nOpen it in the browser?").arg(url));
+    if (rc == QMessageBox::Yes) {
+        QDesktopServices::openUrl(QUrl(url));
+    }
 }
 
 void GameLogDialog::applyFilter()

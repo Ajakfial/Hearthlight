@@ -82,3 +82,44 @@ jobs:
         run: ctest --test-dir build/${{ matrix.preset }} --output-on-failure
         env:
           QT_QPA_PLATFORM: offscreen
+
+      - name: Bundle Qt (Windows)
+        if: startsWith(matrix.os, 'windows')
+        shell: pwsh
+        run: |
+          $windeployqt = Get-ChildItem "$env:GITHUB_WORKSPACE/Qt/${{ matrix.qt_version }}/*/bin/windeployqt.exe" | Select-Object -First 1 -ExpandProperty FullName
+          & $windeployqt --release --no-translations build/windows-ninja/src/app/Hearthlight.exe
+          New-Item -ItemType File -Path build/windows-ninja/src/app/portable.txt -Force | Out-Null
+
+      - name: Bundle Qt (macOS)
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        run: |
+          MACDEPLOYQT=$(echo "${{ github.workspace }}/Qt/${{ matrix.qt_version }}"/*/bin/macdeployqt | cut -d' ' -f1)
+          "$MACDEPLOYQT" build/macos/src/app/Hearthlight.app
+
+      - name: Build AppImage (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        shell: bash
+        run: sh packaging/linux/make-appimage.sh 0.1.0
+
+      - name: Upload artifact (Windows)
+        if: startsWith(matrix.os, 'windows')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hearthlight-windows
+          path: build/windows-ninja/src/app/
+
+      - name: Upload artifact (macOS)
+        if: startsWith(matrix.os, 'macos')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hearthlight-macos
+          path: build/macos/src/app/Hearthlight.app
+
+      - name: Upload artifact (Linux)
+        if: startsWith(matrix.os, 'ubuntu')
+        uses: actions/upload-artifact@v4
+        with:
+          name: Hearthlight-linux
+          path: Hearthlight-0.1.0-x86_64.AppImage

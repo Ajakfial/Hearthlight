@@ -13,6 +13,27 @@ installs, safe-update snapshots with undo, guided first-run setup, crash
 explanations with fixes, world backups, and a friendly live log — all usable
 offline once installed.
 
+## Download a ready-to-run build (no compiling)
+
+Every push to `main` builds all three OSes in CI. To grab one:
+
+1. Open the repo's **Actions** tab
+   ([Hearthlight actions](https://github.com/Ajakfial/Hearthlight/actions))
+   and click the most recent successful run (green check).
+2. Scroll down to **Artifacts** at the bottom of the run summary.
+3. Download your OS and unpack it:
+   - `Hearthlight-windows` — zip of the app folder. Extract and run
+     `Hearthlight.exe` (ships with `portable.txt`, so it keeps its data
+     next to the exe).
+   - `Hearthlight-macos` — `Hearthlight.app` (universal arm64 + x86_64).
+     On first launch, right-click → Open if macOS complains it is unsigned.
+   - `Hearthlight-linux` — `.AppImage`. Run
+     `chmod +x Hearthlight-*.AppImage && ./Hearthlight-*.AppImage`.
+
+Notes: downloading artifacts needs a (free) GitHub account, and artifacts
+are per-commit dev builds that expire — for a permanent copy, build from
+source below.
+
 ## Build instructions
 
 Requirements: CMake 3.21+, a C/C++20 compiler, Qt 6.5+ (`Core Gui Widgets

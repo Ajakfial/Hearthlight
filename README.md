@@ -13,6 +13,16 @@ installs, safe-update snapshots with undo, guided first-run setup, crash
 explanations with fixes, world backups, and a friendly live log — all usable
 offline once installed.
 
+## Screenshots
+
+![Hearth dashboard](screenshots/Dashboard.png)
+![Versions tab](screenshots/Versions-Tab.png)
+![Profiles tab](screenshots/Profiles-Tab.png)
+![Discover tab](screenshots/Discover-Tab.png)
+![Accounts tab](screenshots/Accounts-Tab.png)
+![Settings tab](screenshots/Settings-Tab.png)
+![Hearth log window](screenshots/Hearth-Log-Window.png)
+
 ## Download a ready-to-run build (no compiling)
 
 Every push to `main` builds all three OSes in CI. To grab one:

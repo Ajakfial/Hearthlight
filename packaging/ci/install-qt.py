@@ -235,6 +235,44 @@ def main():
         show_tree()
         sys.exit("Qt install layout unrecognized")
     prefix = os.path.dirname(bindir)
+
+    # IFW helper packages (icu, d3dcompiler, opengl32sw) extract flat: their
+    # payload lands directly in the install prefix. The official install
+    # scripts move them into lib//bin/; replicate that so link-time search
+    # and the rpath both resolve. Relative symlinks move together safely.
+    libdir = os.path.join(prefix, "lib")
+    topbindir = os.path.join(prefix, "bin")
+
+    def move_target(name):
+        # Returns the destination dir, or None to leave the entry alone.
+        if args.host == "windows":
+            if name.endswith(".dll"):
+                return topbindir
+            if name.endswith(".lib"):
+                return libdir
+            return None
+        # Versioned .so.73 style names included.
+        if ".so." in name or name.endswith(".so") or name.endswith(".dylib"):
+            return libdir
+        return None
+
+    moved = 0
+    for entry in sorted(os.listdir(prefix)):
+        src = os.path.join(prefix, entry)
+        if not (os.path.isfile(src) or os.path.islink(src)):
+            continue
+        destdir = move_target(entry)
+        if destdir is None:
+            continue
+        os.makedirs(destdir, exist_ok=True)
+        dst = os.path.join(destdir, entry)
+        if os.path.lexists(dst) and not os.path.isdir(dst):
+            os.remove(dst)
+        shutil.move(src, dst)
+        moved += 1
+    if moved:
+        log(f"Relocated {moved} helper librar(ies) into lib//bin/")
+
     cmake_dir = os.path.join(prefix, "lib", "cmake", "Qt6")
     if not os.path.isdir(cmake_dir):
         sys.exit(f"Qt6 CMake config missing at {cmake_dir}")

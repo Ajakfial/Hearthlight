@@ -288,13 +288,25 @@ def main():
                f"HEARTHLIGHT_QT_CMAKE={cmake_dir}"]
     gh_env = os.environ.get("GITHUB_ENV")
     gh_path = os.environ.get("GITHUB_PATH")
+    # linuxdeploy's Qt plugin locates Qt via $QMAKE (Qt6 ships qmake6).
+    qmake = None
+    for cand in ("qmake6", "qmake"):
+        if os.path.isfile(os.path.join(bindir, cand)):
+            qmake = os.path.join(bindir, cand)
+            break
+    if qmake:
+        log(f"qmake candidate: {qmake}")
+    else:
+        log("WARNING: no qmake/qmake6 in bindir; linuxdeploy-plugin-qt will fail")
     if gh_env and gh_path:
         with open(gh_env, "a", encoding="utf-8") as f:
             f.write(f"Qt6_DIR={cmake_dir}\n")
             f.write(f"CMAKE_PREFIX_PATH={prefix}\n")
+            if qmake:
+                f.write(f"QMAKE={qmake}\n")
         with open(gh_path, "a", encoding="utf-8") as f:
             f.write(f"{bindir}\n")
-        log("Exported Qt6_DIR, CMAKE_PREFIX_PATH and PATH to the workflow")
+        log("Exported Qt6_DIR, CMAKE_PREFIX_PATH, QMAKE and PATH to the workflow")
     else:
         for line in exports:
             print(line)

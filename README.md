@@ -1,5 +1,10 @@
 # Hearthlight — Your home for every world.
 
+[![CI](https://github.com/Ajakfial/Hearthlight/actions/workflows/ci.yml/badge.svg)](https://github.com/Ajakfial/Hearthlight/actions)
+[![License: MIT](https://img.shields.io/github/license/Ajakfial/Hearthlight)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue)](https://github.com/Ajakfial/Hearthlight/actions)
+[![Qt](https://img.shields.io/badge/Qt-6.5%2B-brightgreen)](https://www.qt.io/download)
+
 An all-in-one Minecraft: Java Edition launcher. Calm, welcoming, uncluttered:
 a total beginner is playing in 60 seconds, modpack power users still get depth
 under an **Advanced** toggle.

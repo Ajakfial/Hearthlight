@@ -14,7 +14,7 @@ jobs:
           - os: windows-latest
             preset: windows-ninja
             qt_version: "6.10.3"
-            qt_arch: win64_msvc2019_64
+            qt_arch: win64_msvc2022_64
             aqt_host: windows
           - os: macos-latest
             preset: macos
@@ -24,7 +24,7 @@ jobs:
           - os: ubuntu-22.04
             preset: linux
             qt_version: "6.10.3"
-            qt_arch: gcc_64
+            qt_arch: linux_gcc_64
             aqt_host: linux
     runs-on: ${{ matrix.os }}
     steps:
@@ -35,33 +35,34 @@ jobs:
         with:
           python-version: "3.12"
 
-      # download.qt.io's MirrorBrain redirects intermittently serve pruned
-      # metadata ("qt_base not found while parsing XML"), so install Qt from
-      # a full mirror instead of the action's default host. Cached per
+      # Qt's online repo was restructured (nested metadata dirs, renamed
+      # hosts/arches) which aqtinstall 3.3.0 predates, so CI uses the
+      # first-party installer in packaging/ci instead. Cached per
       # version/arch/OS after the first green run.
       - name: Restore cached Qt
         id: qt-cache
         uses: actions/cache@v4
         with:
           path: ${{ github.workspace }}/Qt
-          key: qt-${{ matrix.qt_version }}-${{ matrix.qt_arch }}-${{ runner.os }}-v1
+          key: qt-${{ matrix.qt_version }}-${{ matrix.qt_arch }}-${{ runner.os }}-v2
 
-      - name: Install Qt (aqt, full mirror)
-        if: steps.qt-cache.outputs.cache-hit != 'true'
+      - name: Install Qt
         shell: bash
         run: |
-          python3 -m pip install "aqtinstall>=3.1"
-          python3 -m aqt install-qt ${{ matrix.aqt_host }} desktop ${{ matrix.qt_version }} ${{ matrix.qt_arch }} \
-            -m qtsvg --base https://mirrors.aliyun.com/qt/ \
+          python3 -m pip install py7zr
+          python3 packaging/ci/install-qt.py --host ${{ matrix.aqt_host }} \
+            --version ${{ matrix.qt_version }} --arch ${{ matrix.qt_arch }} \
             --outputdir "${{ github.workspace }}/Qt"
 
-      - name: Export Qt env
-        shell: bash
-        run: |
-          QTDIR="${{ github.workspace }}/Qt/${{ matrix.qt_version }}/${{ matrix.qt_arch }}"
-          echo "Qt6_DIR=$QTDIR/lib/cmake/Qt6" >> "$GITHUB_ENV"
-          echo "CMAKE_PREFIX_PATH=$QTDIR" >> "$GITHUB_ENV"
-          echo "$QTDIR/bin" >> "$GITHUB_PATH"
+      - name: Install Linux system deps
+        if: startsWith(matrix.os, 'ubuntu')
+        run: >
+          sudo apt-get update &&
+          sudo apt-get install -y build-essential libgl1-mesa-dev
+          libxkbcommon-dev libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4
+          libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0
+          libxcb-shape0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0
+          libxcb-xkb-dev
 
       - name: Set up MSVC (Windows)
         if: startsWith(matrix.os, 'windows')
@@ -79,3 +80,5 @@ jobs:
 
       - name: Test
         run: ctest --test-dir build/${{ matrix.preset }} --output-on-failure
+        env:
+          QT_QPA_PLATFORM: offscreen
